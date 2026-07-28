@@ -4,137 +4,210 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
 
-#define MAX_PATIENTS 100
-#define MAX_DOCTORS 20
-#define MAX_APPOINTMENTS 500
-#define MAX_QUEUE 100
+#define NAME_LEN 60
+#define PHONE_LEN 20
+#define SPEC_LEN 60
+#define DATE_LEN 11
+#define TIME_LEN 6
 
-typedef struct {
+#define PATIENT_FILE "data/patients.dat"
+#define DOCTOR_FILE "data/doctors.dat"
+#define APPOINTMENT_FILE "data/appointments.dat"
+
+/* =========================
+   PATIENT LINKED LIST
+   ========================= */
+
+typedef struct Patient
+{
     int id;
-    char name[50];
+    char name[NAME_LEN];
     int age;
     char gender[15];
-    char phone[15];
+    char phone[PHONE_LEN];
+
+    struct Patient *next;
 } Patient;
 
-typedef struct {
+
+/* =========================
+   DOCTOR LINKED LIST
+   ========================= */
+
+typedef struct Doctor
+{
     int id;
-    char name[50];
-    char specialization[40];
-    char startTime[6];
-    char endTime[6];
-    int slotDuration;
+    char name[NAME_LEN];
+    char specialization[SPEC_LEN];
+
+    char startTime[TIME_LEN];
+    char endTime[TIME_LEN];
+
+    struct Doctor *next;
 } Doctor;
 
-typedef enum {
-    BOOKED,
-    WAITING,
-    CONSULTING,
-    COMPLETED,
-    CANCELLED
-} AppointmentStatus;
 
-typedef struct {
+/* =========================
+   APPOINTMENT LINKED LIST
+   ========================= */
+
+typedef struct Appointment
+{
     int id;
     int patientId;
     int doctorId;
 
-    char date[11];
-    char scheduledTime[6];
+    char date[DATE_LEN];
+    char time[TIME_LEN];
+    char status[25];
 
-    char checkInTime[6];
-    char actualStart[6];
-    char actualEnd[6];
-
-    AppointmentStatus status;
+    struct Appointment *next;
 } Appointment;
 
-typedef struct {
+
+/* =========================
+   FIFO WAITING QUEUE
+   ========================= */
+
+typedef struct WaitingNode
+{
     int appointmentId;
+
+    struct WaitingNode *next;
+} WaitingNode;
+
+
+/* =========================
+   PRIORITY QUEUE
+   ========================= */
+
+typedef struct PriorityNode
+{
+    int patientId;
+    int doctorId;
+
+    char date[DATE_LEN];
+
+    /*
+       1 = Emergency
+       2 = Urgent
+       3 = Senior Citizen
+       4 = Normal
+    */
     int priority;
-    int arrivalOrder;
-} PriorityPatient;
+
+    unsigned long sequence;
+
+    struct PriorityNode *next;
+} PriorityNode;
 
 
-/* GLOBAL DATA */
+/* =========================
+   GLOBAL HEAD POINTERS
+   ========================= */
 
-extern Patient patients[MAX_PATIENTS];
-extern Doctor doctors[MAX_DOCTORS];
-extern Appointment appointments[MAX_APPOINTMENTS];
+extern Patient *patientHead;
+extern Doctor *doctorHead;
+extern Appointment *appointmentHead;
 
-extern PriorityPatient priorityQueue[MAX_QUEUE];
+extern WaitingNode *waitingFront;
+extern WaitingNode *waitingRear;
 
-extern int patientCount;
-extern int doctorCount;
-extern int appointmentCount;
-extern int priorityCount;
-extern int arrivalCounter;
-
-
-/* PATIENT */
-
-void registerPatient();
-void viewPatients();
-void searchPatient();
+extern PriorityNode *priorityHead;
 
 
-/* DOCTOR */
+/* =========================
+   PATIENT FUNCTIONS
+   ========================= */
 
-void addDoctor();
-void viewDoctors();
+void registerPatient(void);
+void viewPatients(void);
+void searchPatient(void);
+
+Patient *findPatientById(int id);
+
+void loadPatients(void);
+void savePatients(void);
 
 
-/* APPOINTMENT */
+/* =========================
+   DOCTOR FUNCTIONS
+   ========================= */
 
-void bookAppointment();
-void viewAppointments();
-void cancelAppointment();
+void addDoctor(void);
+void viewDoctors(void);
+
+Doctor *findDoctorById(int id);
+
+void loadDoctors(void);
+void saveDoctors(void);
+
+
+/* =========================
+   APPOINTMENT FUNCTIONS
+   ========================= */
+
+void bookAppointment(void);
+void viewAppointments(void);
+
+void patientCheckIn(void);
+
+void completeConsultation(void);
+void cancelAppointment(void);
+
+Appointment *findAppointmentById(int id);
+
+void loadAppointments(void);
+void saveAppointments(void);
+
+
+/* =========================
+   WAITING QUEUE
+   ========================= */
+
+void enqueueWaiting(int appointmentId);
+int dequeueWaiting(void);
+
+void viewWaitingQueue(void);
+void callNextPatient(void);
+
+
+/* =========================
+   PRIORITY QUEUE
+   ========================= */
+
+void addPriorityPatient(void);
+void viewPriorityQueue(void);
+void processPriorityPatient(void);
+
+
+/* =========================
+   SMART SCHEDULER
+   ========================= */
+
+void smartAppointmentFinder(void);
 
 int isSlotAvailable(
     int doctorId,
-    char date[],
-    char time[]
+    const char *date,
+    const char *time
 );
 
-int isRecoverableSlot(
-    Appointment *appointment
+void handleEarlyCompletion(
+    int doctorId,
+    const char *date,
+    const char *completedTime
 );
 
 
-/* FIFO QUEUE */
+/* =========================
+   HELPERS
+   ========================= */
 
-void checkInPatient();
-void viewWaitingQueue();
-void callNextPatient();
-void completeConsultation();
+int timeToMinutes(const char *time);
+void minutesToTime(int minutes, char *buffer);
 
-
-/* PRIORITY QUEUE */
-
-void addPriorityPatient();
-void viewPriorityQueue();
-void processPriorityPatient();
-
-
-/* SMART SCHEDULER */
-
-void smartAppointmentFinder();
-
-
-/* DASHBOARD */
-
-void dashboard();
-
-
-/* UTILITY */
-
-Patient *getPatient(int id);
-Doctor *getDoctor(int id);
-Appointment *getAppointment(int id);
-
-int timeToMinutes(char time[]);
-void getCurrentTime(char result[]);
+const char *priorityName(int priority);
 
 #endif

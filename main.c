@@ -1,146 +1,43 @@
 #include "hospital.h"
 
 
-Patient patients[MAX_PATIENTS];
-Doctor doctors[MAX_DOCTORS];
-Appointment appointments[MAX_APPOINTMENTS];
+/* =========================
+   GLOBAL DATA STRUCTURES
+   ========================= */
 
-PriorityPatient priorityQueue[MAX_QUEUE];
+Patient *patientHead = NULL;
+Doctor *doctorHead = NULL;
+Appointment *appointmentHead = NULL;
 
-int patientCount = 0;
-int doctorCount = 0;
-int appointmentCount = 0;
+WaitingNode *waitingFront = NULL;
+WaitingNode *waitingRear = NULL;
 
-int priorityCount = 0;
-int arrivalCounter = 0;
-
-
-void loadDemoDoctors()
-{
-    doctors[0].id = 501;
-    strcpy(doctors[0].name, "Dr. Arjun Mehta");
-    strcpy(doctors[0].specialization, "Cardiology");
-    strcpy(doctors[0].startTime, "09:00");
-    strcpy(doctors[0].endTime, "17:00");
-    doctors[0].slotDuration = 30;
+PriorityNode *priorityHead = NULL;
 
 
-    doctors[1].id = 502;
-    strcpy(doctors[1].name, "Dr. Priya Sharma");
-    strcpy(doctors[1].specialization, "Cardiology");
-    strcpy(doctors[1].startTime, "10:00");
-    strcpy(doctors[1].endTime, "18:00");
-    doctors[1].slotDuration = 30;
+/* =========================
+   PATIENT MENU
+   ========================= */
 
-
-    doctors[2].id = 503;
-    strcpy(doctors[2].name, "Dr. Neha Rao");
-    strcpy(doctors[2].specialization, "Dermatology");
-    strcpy(doctors[2].startTime, "09:00");
-    strcpy(doctors[2].endTime, "16:00");
-    doctors[2].slotDuration = 30;
-
-
-    doctors[3].id = 504;
-    strcpy(doctors[3].name, "Dr. Vikram Singh");
-    strcpy(doctors[3].specialization, "Orthopaedics");
-    strcpy(doctors[3].startTime, "08:00");
-    strcpy(doctors[3].endTime, "16:00");
-    doctors[3].slotDuration = 30;
-
-    doctorCount = 4;
-}
-
-
-void dashboard()
-{
-    int booked = 0;
-    int waiting = 0;
-    int consulting = 0;
-    int completed = 0;
-
-    for (int i = 0; i < appointmentCount; i++)
-    {
-        switch (appointments[i].status)
-        {
-            case BOOKED:
-                booked++;
-                break;
-
-            case WAITING:
-                waiting++;
-                break;
-
-            case CONSULTING:
-                consulting++;
-                break;
-
-            case COMPLETED:
-                completed++;
-                break;
-
-            default:
-                break;
-        }
-    }
-
-    printf("\n==============================================\n");
-    printf("         SMART HOSPITAL DASHBOARD\n");
-    printf("==============================================\n");
-
-    printf("Patients Registered : %d\n", patientCount);
-    printf("Doctors Available   : %d\n", doctorCount);
-    printf("Booked Appointments : %d\n", booked);
-    printf("Waiting Patients    : %d\n", waiting);
-    printf("In Consultation     : %d\n", consulting);
-    printf("Completed           : %d\n", completed);
-    printf("Priority Cases      : %d\n", priorityCount);
-
-    printf("==============================================\n");
-}
-
-
-int main()
+void patientManagementMenu(void)
 {
     int choice;
 
-    loadDemoDoctors();
-
     while (1)
     {
-        printf("\n\n");
-        printf("====================================================\n");
-        printf("   SMART HOSPITAL APPOINTMENT MANAGEMENT SYSTEM\n");
-        printf("====================================================\n");
+        printf("\n");
+        printf("========================================\n");
+        printf("          PATIENT MANAGEMENT\n");
+        printf("========================================\n");
 
         printf("1. Register Patient\n");
         printf("2. View Patients\n");
         printf("3. Search Patient\n");
+        printf("0. Back\n");
 
-        printf("4. Add Doctor\n");
-        printf("5. View Doctors\n");
+        printf("========================================\n");
+        printf("Enter choice: ");
 
-        printf("6. Book Appointment\n");
-        printf("7. View Appointments\n");
-
-        printf("8. Smart Appointment Finder\n");
-
-        printf("9. Patient Check-In\n");
-        printf("10. View Live Waiting Queue\n");
-        printf("11. Call Next Patient\n");
-        printf("12. Complete Consultation\n");
-
-        printf("13. Add Priority Patient\n");
-        printf("14. View Priority Queue\n");
-        printf("15. Process Priority Patient\n");
-
-        printf("16. Cancel Appointment\n");
-
-        printf("17. Dashboard\n");
-
-        printf("0. Exit\n");
-
-        printf("\nEnter choice: ");
         scanf("%d", &choice);
 
         switch (choice)
@@ -157,65 +54,315 @@ int main()
                 searchPatient();
                 break;
 
-            case 4:
+            case 0:
+                return;
+
+            default:
+                printf("\nInvalid choice.\n");
+        }
+    }
+}
+
+
+/* =========================
+   DOCTOR MENU
+   ========================= */
+
+void doctorManagementMenu(void)
+{
+    int choice;
+
+    while (1)
+    {
+        printf("\n");
+        printf("========================================\n");
+        printf("          DOCTOR MANAGEMENT\n");
+        printf("========================================\n");
+
+        printf("1. Add Doctor\n");
+        printf("2. View Doctors\n");
+        printf("0. Back\n");
+
+        printf("========================================\n");
+        printf("Enter choice: ");
+
+        scanf("%d", &choice);
+
+        switch (choice)
+        {
+            case 1:
                 addDoctor();
                 break;
 
-            case 5:
+            case 2:
                 viewDoctors();
                 break;
 
-            case 6:
-                bookAppointment();
-                break;
+            case 0:
+                return;
 
-            case 7:
-                viewAppointments();
-                break;
+            default:
+                printf("\nInvalid choice.\n");
+        }
+    }
+}
 
-            case 8:
-                smartAppointmentFinder();
-                break;
 
-            case 9:
-                checkInPatient();
-                break;
+/* =========================
+   WAITING QUEUE MENU
+   ========================= */
 
-            case 10:
+void waitingQueueMenu(void)
+{
+    int choice;
+
+    while (1)
+    {
+        printf("\n");
+        printf("========================================\n");
+        printf("            WAITING QUEUE\n");
+        printf("========================================\n");
+
+        printf("1. View Waiting Queue\n");
+        printf("2. Call Next Patient\n");
+        printf("0. Back\n");
+
+        printf("========================================\n");
+        printf("Enter choice: ");
+
+        scanf("%d", &choice);
+
+        switch (choice)
+        {
+            case 1:
                 viewWaitingQueue();
                 break;
 
-            case 11:
+            case 2:
                 callNextPatient();
+
+                /*
+                   Status may change to
+                   IN_CONSULTATION.
+                */
+                saveAppointments();
+
                 break;
 
-            case 12:
-                completeConsultation();
-                break;
+            case 0:
+                return;
 
-            case 13:
+            default:
+                printf("\nInvalid choice.\n");
+        }
+    }
+}
+
+
+/* =========================
+   PRIORITY QUEUE MENU
+   ========================= */
+
+void priorityQueueMenu(void)
+{
+    int choice;
+
+    while (1)
+    {
+        printf("\n");
+        printf("========================================\n");
+        printf("            PRIORITY QUEUE\n");
+        printf("========================================\n");
+
+        printf("1. Add Priority Patient\n");
+        printf("2. View Priority Queue\n");
+        printf("3. Process Priority Patient\n");
+        printf("0. Back\n");
+
+        printf("========================================\n");
+        printf("Enter choice: ");
+
+        scanf("%d", &choice);
+
+        switch (choice)
+        {
+            case 1:
                 addPriorityPatient();
                 break;
 
-            case 14:
+            case 2:
                 viewPriorityQueue();
                 break;
 
-            case 15:
+            case 3:
                 processPriorityPatient();
                 break;
 
-            case 16:
+            case 0:
+                return;
+
+            default:
+                printf("\nInvalid choice.\n");
+        }
+    }
+}
+
+
+/* =========================
+   APPOINTMENT ACTION MENU
+   ========================= */
+
+void appointmentActionMenu(void)
+{
+    int choice;
+
+    while (1)
+    {
+        printf("\n");
+        printf("========================================\n");
+        printf("       APPOINTMENT MANAGEMENT\n");
+        printf("========================================\n");
+
+        printf("1. Complete Consultation\n");
+        printf("2. Cancel Appointment\n");
+        printf("0. Back\n");
+
+        printf("========================================\n");
+        printf("Enter choice: ");
+
+        scanf("%d", &choice);
+
+        switch (choice)
+        {
+            case 1:
+                completeConsultation();
+                break;
+
+            case 2:
                 cancelAppointment();
                 break;
 
-            case 17:
-                dashboard();
+            case 0:
+                return;
+
+            default:
+                printf("\nInvalid choice.\n");
+        }
+    }
+}
+
+
+/* =========================
+   MAIN MENU
+   ========================= */
+
+void displayMainMenu(void)
+{
+    printf("\n");
+    printf("==================================================\n");
+    printf("     SMART HOSPITAL APPOINTMENT MANAGEMENT\n");
+    printf("==================================================\n");
+
+    printf("1. Patient Management\n");
+    printf("2. Doctor Management\n");
+    printf("3. Book Appointment\n");
+    printf("4. View Appointments\n");
+    printf("5. Smart Appointment Finder\n");
+    printf("6. Patient Check-In\n");
+    printf("7. Manage Waiting Queue\n");
+    printf("8. Manage Priority Queue\n");
+    printf("9. Complete / Cancel Appointment\n");
+    printf("0. Exit\n");
+
+    printf("==================================================\n");
+}
+
+
+/* =========================
+   MAIN
+   ========================= */
+
+int main(void)
+{
+    int choice;
+
+    /*
+       Reconstruct the linked lists from
+       persistent storage.
+    */
+
+    loadPatients();
+    loadDoctors();
+    loadAppointments();
+
+    printf("\nHospital records loaded successfully.\n");
+
+    while (1)
+    {
+        displayMainMenu();
+
+        printf("Enter choice: ");
+
+        if (scanf("%d", &choice) != 1)
+        {
+            while (getchar() != '\n');
+
+            printf("\nInvalid input. Enter a number.\n");
+
+            continue;
+        }
+
+        switch (choice)
+        {
+            case 1:
+                patientManagementMenu();
+                break;
+
+            case 2:
+                doctorManagementMenu();
+                break;
+
+            case 3:
+                bookAppointment();
+                break;
+
+            case 4:
+                viewAppointments();
+                break;
+
+            case 5:
+                smartAppointmentFinder();
+                break;
+
+            case 6:
+                patientCheckIn();
+                break;
+
+            case 7:
+                waitingQueueMenu();
+                break;
+
+            case 8:
+                priorityQueueMenu();
+                break;
+
+            case 9:
+                appointmentActionMenu();
                 break;
 
             case 0:
 
-                printf("\nThank you for using SmartCare.\n");
+                /*
+                   Final save before exit.
+                */
+
+                savePatients();
+                saveDoctors();
+                saveAppointments();
+
+                printf("\nRecords saved successfully.\n");
+                printf("Hospital Appointment System Closed.\n");
+
                 return 0;
 
             default:

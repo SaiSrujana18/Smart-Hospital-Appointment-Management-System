@@ -1,107 +1,490 @@
 #include "hospital.h"
 
 
-Patient *getPatient(int id)
+static int nextPatientId = 1;
+
+
+/* =========================
+   FIND PATIENT
+   ========================= */
+
+Patient *findPatientById(int id)
 {
-    for (int i = 0; i < patientCount; i++)
+    Patient *current = patientHead;
+
+    while (current != NULL)
     {
-        if (patients[i].id == id)
-            return &patients[i];
+        if (current->id == id)
+        {
+            return current;
+        }
+
+        current = current->next;
     }
 
     return NULL;
 }
 
 
-void registerPatient()
+/* =========================
+   SAVE PATIENTS
+   ========================= */
+
+void savePatients(void)
 {
-    if (patientCount >= MAX_PATIENTS)
+    FILE *file;
+
+    Patient *current;
+
+    file = fopen(PATIENT_FILE, "wb");
+
+    if (file == NULL)
     {
-        printf("\nPatient database full.\n");
+        printf("\nWarning: Unable to save patient data.\n");
+
         return;
     }
 
-    Patient *p = &patients[patientCount];
+    current = patientHead;
 
-    p->id = 1001 + patientCount;
+    while (current != NULL)
+    {
+        /*
+           Do not write the pointer value.
+           Write only actual record fields.
+        */
 
-    printf("\n=========== REGISTER PATIENT ===========\n");
+        fwrite(
+            &current->id,
+            sizeof(int),
+            1,
+            file
+        );
 
-    printf("Name: ");
-    scanf(" %[^\n]", p->name);
+        fwrite(
+            current->name,
+            sizeof(char),
+            NAME_LEN,
+            file
+        );
 
-    printf("Age: ");
-    scanf("%d", &p->age);
+        fwrite(
+            &current->age,
+            sizeof(int),
+            1,
+            file
+        );
 
-    printf("Gender: ");
-    scanf(" %14s", p->gender);
+        fwrite(
+            current->gender,
+            sizeof(char),
+            15,
+            file
+        );
 
-    printf("Phone: ");
-    scanf(" %14s", p->phone);
+        fwrite(
+            current->phone,
+            sizeof(char),
+            PHONE_LEN,
+            file
+        );
 
-    patientCount++;
+        current = current->next;
+    }
 
-    printf("\nPatient registered successfully.\n");
-    printf("Patient ID: %d\n", p->id);
+    fclose(file);
 }
 
 
-void viewPatients()
-{
-    printf("\n================ PATIENT DIRECTORY ================\n");
+/* =========================
+   LOAD PATIENTS
+   ========================= */
 
-    if (patientCount == 0)
+void loadPatients(void)
+{
+    FILE *file;
+
+    Patient *last = NULL;
+
+    int maxId = 0;
+
+    file = fopen(PATIENT_FILE, "rb");
+
+    /*
+       First run:
+       file may not exist yet.
+
+       This is normal.
+    */
+
+    if (file == NULL)
     {
-        printf("No patients registered.\n");
         return;
     }
 
-    printf("%-8s %-25s %-6s %-12s %-15s\n",
-           "ID",
-           "Name",
-           "Age",
-           "Gender",
-           "Phone");
-
-    printf("-----------------------------------------------------------------\n");
-
-    for (int i = 0; i < patientCount; i++)
+    while (1)
     {
-        printf("%-8d %-25s %-6d %-12s %-15s\n",
-               patients[i].id,
-               patients[i].name,
-               patients[i].age,
-               patients[i].gender,
-               patients[i].phone);
-    }
-}
+        Patient *newPatient;
 
+        newPatient =
+            (Patient *)malloc(
+                sizeof(Patient)
+            );
 
-void searchPatient()
-{
-    char search[50];
-
-    printf("\nEnter patient name: ");
-    scanf(" %[^\n]", search);
-
-    int found = 0;
-
-    printf("\nSearch Results\n");
-    printf("----------------------------------------\n");
-
-    for (int i = 0; i < patientCount; i++)
-    {
-        if (strstr(patients[i].name, search) != NULL)
+        if (newPatient == NULL)
         {
-            printf("ID    : %d\n", patients[i].id);
-            printf("Name  : %s\n", patients[i].name);
-            printf("Age   : %d\n", patients[i].age);
-            printf("Phone : %s\n\n", patients[i].phone);
+            break;
+        }
 
-            found = 1;
+        if (
+            fread(
+                &newPatient->id,
+                sizeof(int),
+                1,
+                file
+            ) != 1
+        )
+        {
+            free(newPatient);
+
+            break;
+        }
+
+        if (
+            fread(
+                newPatient->name,
+                sizeof(char),
+                NAME_LEN,
+                file
+            ) != NAME_LEN
+        )
+        {
+            free(newPatient);
+            break;
+        }
+
+        if (
+            fread(
+                &newPatient->age,
+                sizeof(int),
+                1,
+                file
+            ) != 1
+        )
+        {
+            free(newPatient);
+            break;
+        }
+
+        if (
+            fread(
+                newPatient->gender,
+                sizeof(char),
+                15,
+                file
+            ) != 15
+        )
+        {
+            free(newPatient);
+            break;
+        }
+
+        if (
+            fread(
+                newPatient->phone,
+                sizeof(char),
+                PHONE_LEN,
+                file
+            ) != PHONE_LEN
+        )
+        {
+            free(newPatient);
+            break;
+        }
+
+        newPatient->next = NULL;
+
+        if (patientHead == NULL)
+        {
+            patientHead = newPatient;
+        }
+        else
+        {
+            last->next = newPatient;
+        }
+
+        last = newPatient;
+
+        if (newPatient->id > maxId)
+        {
+            maxId = newPatient->id;
         }
     }
 
-    if (!found)
-        printf("No patient found.\n");
+    fclose(file);
+
+    nextPatientId = maxId + 1;
+}
+
+
+/* =========================
+   REGISTER PATIENT
+   ========================= */
+
+void registerPatient(void)
+{
+    Patient *newPatient;
+
+    Patient *current;
+
+    newPatient =
+        (Patient *)malloc(
+            sizeof(Patient)
+        );
+
+    if (newPatient == NULL)
+    {
+        printf("\nMemory allocation failed.\n");
+
+        return;
+    }
+
+    newPatient->id =
+        nextPatientId++;
+
+    printf("\n");
+    printf("========================================\n");
+    printf("           REGISTER PATIENT\n");
+    printf("========================================\n");
+
+    printf("Name: ");
+    scanf(
+        " %59[^\n]",
+        newPatient->name
+    );
+
+    printf("Age: ");
+    scanf(
+        "%d",
+        &newPatient->age
+    );
+
+    printf("Gender: ");
+    scanf(
+        " %14[^\n]",
+        newPatient->gender
+    );
+
+    printf("Phone: ");
+    scanf(
+        " %19s",
+        newPatient->phone
+    );
+
+    newPatient->next = NULL;
+
+    if (patientHead == NULL)
+    {
+        patientHead = newPatient;
+    }
+    else
+    {
+        current = patientHead;
+
+        while (current->next != NULL)
+        {
+            current = current->next;
+        }
+
+        current->next = newPatient;
+    }
+
+    /*
+       Persist immediately.
+    */
+
+    savePatients();
+
+    printf("\nPatient registered successfully.\n");
+
+    printf(
+        "Patient ID: %d\n",
+        newPatient->id
+    );
+}
+
+
+/* =========================
+   VIEW PATIENTS
+   ========================= */
+
+void viewPatients(void)
+{
+    Patient *current =
+        patientHead;
+
+    printf("\n");
+    printf("==========================================================================\n");
+    printf("                            PATIENTS\n");
+    printf("==========================================================================\n");
+
+    if (current == NULL)
+    {
+        printf("No patients registered.\n");
+
+        return;
+    }
+
+    printf(
+        "%-6s %-25s %-8s %-15s %-15s\n",
+        "ID",
+        "Name",
+        "Age",
+        "Gender",
+        "Phone"
+    );
+
+    printf(
+        "--------------------------------------------------------------------------\n"
+    );
+
+    while (current != NULL)
+    {
+        printf(
+            "%-6d %-25s %-8d %-15s %-15s\n",
+            current->id,
+            current->name,
+            current->age,
+            current->gender,
+            current->phone
+        );
+
+        current = current->next;
+    }
+}
+
+
+/* =========================
+   SEARCH PATIENT
+   ========================= */
+
+void searchPatient(void)
+{
+    int option;
+
+    if (patientHead == NULL)
+    {
+        printf("\nNo patients registered.\n");
+
+        return;
+    }
+
+    printf("\n");
+    printf("1. Search by Patient ID\n");
+    printf("2. Search by Name\n");
+
+    printf("Choice: ");
+
+    scanf("%d", &option);
+
+    if (option == 1)
+    {
+        int id;
+
+        Patient *patient;
+
+        printf("Patient ID: ");
+
+        scanf("%d", &id);
+
+        patient =
+            findPatientById(id);
+
+        if (patient == NULL)
+        {
+            printf("\nPatient not found.\n");
+
+            return;
+        }
+
+        printf("\nPatient Found\n");
+
+        printf(
+            "ID     : %d\n",
+            patient->id
+        );
+
+        printf(
+            "Name   : %s\n",
+            patient->name
+        );
+
+        printf(
+            "Age    : %d\n",
+            patient->age
+        );
+
+        printf(
+            "Gender : %s\n",
+            patient->gender
+        );
+
+        printf(
+            "Phone  : %s\n",
+            patient->phone
+        );
+    }
+
+    else if (option == 2)
+    {
+        char name[NAME_LEN];
+
+        Patient *current =
+            patientHead;
+
+        int found = 0;
+
+        printf("Enter patient name: ");
+
+        scanf(
+            " %59[^\n]",
+            name
+        );
+
+        while (current != NULL)
+        {
+            if (
+                strstr(
+                    current->name,
+                    name
+                ) != NULL
+            )
+            {
+                printf(
+                    "\nID: %d | Name: %s | Age: %d | Phone: %s\n",
+                    current->id,
+                    current->name,
+                    current->age,
+                    current->phone
+                );
+
+                found = 1;
+            }
+
+            current =
+                current->next;
+        }
+
+        if (!found)
+        {
+            printf(
+                "\nNo matching patient found.\n"
+            );
+        }
+    }
+
+    else
+    {
+        printf("\nInvalid option.\n");
+    }
 }

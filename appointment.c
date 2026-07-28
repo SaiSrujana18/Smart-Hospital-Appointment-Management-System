@@ -1,296 +1,520 @@
 #include "hospital.h"
 
 
-Appointment *getAppointment(int id)
+static int nextAppointmentId = 1;
+
+
+/* =========================
+   FIND APPOINTMENT
+   ========================= */
+
+Appointment *findAppointmentById(int id)
 {
-    for (int i = 0; i < appointmentCount; i++)
+    Appointment *current =
+        appointmentHead;
+
+    while (current != NULL)
     {
-        if (appointments[i].id == id)
-            return &appointments[i];
+        if (current->id == id)
+        {
+            return current;
+        }
+
+        current =
+            current->next;
     }
 
     return NULL;
 }
 
 
-int timeToMinutes(char time[])
+/* =========================
+   SAVE APPOINTMENTS
+   ========================= */
+
+void saveAppointments(void)
 {
-    int hour;
-    int minute;
+    FILE *file;
 
-    sscanf(time, "%d:%d", &hour, &minute);
+    Appointment *current;
 
-    return hour * 60 + minute;
-}
+    file =
+        fopen(
+            APPOINTMENT_FILE,
+            "wb"
+        );
 
-
-void getCurrentTime(char result[])
-{
-    time_t current = time(NULL);
-
-    struct tm *local = localtime(&current);
-
-    sprintf(
-        result,
-        "%02d:%02d",
-        local->tm_hour,
-        local->tm_min
-    );
-}
-
-
-/*
-   DYNAMIC GAP RECOVERY
-
-   Example:
-
-   Appointment scheduled = 16:30
-   Actual completion      = 16:20
-
-   The 16:30 slot may be reused only when:
-
-   1. Consultation completed before 16:30
-   2. Next slot (17:00) is empty
-   3. No patient is already WAITING for this doctor
-*/
-
-int isRecoverableSlot(Appointment *appointment)
-{
-    if (appointment->status != COMPLETED)
-        return 0;
-
-    if (strlen(appointment->actualEnd) == 0)
-        return 0;
-
-
-    int scheduled =
-        timeToMinutes(appointment->scheduledTime);
-
-    int completed =
-        timeToMinutes(appointment->actualEnd);
-
-
-    if (completed >= scheduled)
-        return 0;
-
-
-    Doctor *doctor =
-        getDoctor(appointment->doctorId);
-
-    if (doctor == NULL)
-        return 0;
-
-
-    int nextSlot =
-        scheduled + doctor->slotDuration;
-
-
-    /*
-       CONDITION 1:
-       Check whether the next slot already
-       contains an active appointment.
-    */
-
-    for (int i = 0; i < appointmentCount; i++)
+    if (file == NULL)
     {
-        Appointment *a = &appointments[i];
+        printf(
+            "\nWarning: Unable to save appointment data.\n"
+        );
 
-        if (a->id == appointment->id)
-            continue;
+        return;
+    }
 
-        if (a->doctorId != appointment->doctorId)
-            continue;
+    current =
+        appointmentHead;
 
-        if (strcmp(a->date, appointment->date) != 0)
-            continue;
+    while (current != NULL)
+    {
+        fwrite(
+            &current->id,
+            sizeof(int),
+            1,
+            file
+        );
+
+        fwrite(
+            &current->patientId,
+            sizeof(int),
+            1,
+            file
+        );
+
+        fwrite(
+            &current->doctorId,
+            sizeof(int),
+            1,
+            file
+        );
+
+        fwrite(
+            current->date,
+            sizeof(char),
+            DATE_LEN,
+            file
+        );
+
+        fwrite(
+            current->time,
+            sizeof(char),
+            TIME_LEN,
+            file
+        );
+
+        fwrite(
+            current->status,
+            sizeof(char),
+            25,
+            file
+        );
+
+        current =
+            current->next;
+    }
+
+    fclose(file);
+}
 
 
-        int appointmentTime =
-            timeToMinutes(a->scheduledTime);
+/* =========================
+   LOAD APPOINTMENTS
+   ========================= */
 
+void loadAppointments(void)
+{
+    FILE *file;
 
-        if (appointmentTime == nextSlot &&
-            a->status != CANCELLED)
+    Appointment *last = NULL;
+
+    int maxId = 0;
+
+    file =
+        fopen(
+            APPOINTMENT_FILE,
+            "rb"
+        );
+
+    if (file == NULL)
+    {
+        return;
+    }
+
+    while (1)
+    {
+        Appointment *newAppointment;
+
+        newAppointment =
+            (Appointment *)malloc(
+                sizeof(Appointment)
+            );
+
+        if (newAppointment == NULL)
         {
-            return 0;
+            break;
+        }
+
+        if (
+            fread(
+                &newAppointment->id,
+                sizeof(int),
+                1,
+                file
+            ) != 1
+        )
+        {
+            free(newAppointment);
+            break;
+        }
+
+        if (
+            fread(
+                &newAppointment->patientId,
+                sizeof(int),
+                1,
+                file
+            ) != 1
+        )
+        {
+            free(newAppointment);
+            break;
+        }
+
+        if (
+            fread(
+                &newAppointment->doctorId,
+                sizeof(int),
+                1,
+                file
+            ) != 1
+        )
+        {
+            free(newAppointment);
+            break;
+        }
+
+        if (
+            fread(
+                newAppointment->date,
+                sizeof(char),
+                DATE_LEN,
+                file
+            ) != DATE_LEN
+        )
+        {
+            free(newAppointment);
+            break;
+        }
+
+        if (
+            fread(
+                newAppointment->time,
+                sizeof(char),
+                TIME_LEN,
+                file
+            ) != TIME_LEN
+        )
+        {
+            free(newAppointment);
+            break;
+        }
+
+        if (
+            fread(
+                newAppointment->status,
+                sizeof(char),
+                25,
+                file
+            ) != 25
+        )
+        {
+            free(newAppointment);
+            break;
+        }
+
+        newAppointment->next =
+            NULL;
+
+        if (appointmentHead == NULL)
+        {
+            appointmentHead =
+                newAppointment;
+        }
+        else
+        {
+            last->next =
+                newAppointment;
+        }
+
+        last =
+            newAppointment;
+
+        if (
+            newAppointment->id >
+            maxId
+        )
+        {
+            maxId =
+                newAppointment->id;
         }
     }
 
+    fclose(file);
 
-    /*
-       CONDITION 2:
-       Existing waiting patients get priority
-       over creating a new appointment.
-    */
-
-    for (int i = 0; i < appointmentCount; i++)
-    {
-        Appointment *a = &appointments[i];
-
-        if (a->doctorId ==
-                appointment->doctorId &&
-
-            strcmp(
-                a->date,
-                appointment->date
-            ) == 0 &&
-
-            a->status == WAITING)
-        {
-            return 0;
-        }
-    }
-
-
-    return 1;
+    nextAppointmentId =
+        maxId + 1;
 }
 
+
+/* =========================
+   SLOT AVAILABILITY
+   ========================= */
 
 int isSlotAvailable(
     int doctorId,
-    char date[],
-    char time[]
+    const char *date,
+    const char *time
 )
 {
-    for (int i = 0; i < appointmentCount; i++)
+    Appointment *current =
+        appointmentHead;
+
+    while (current != NULL)
     {
-        Appointment *a =
-            &appointments[i];
-
-
-        if (a->doctorId == doctorId &&
-
-            strcmp(a->date, date) == 0 &&
-
+        if (
+            current->doctorId == doctorId &&
             strcmp(
-                a->scheduledTime,
+                current->date,
+                date
+            ) == 0 &&
+            strcmp(
+                current->time,
                 time
-            ) == 0)
+            ) == 0 &&
+            strcmp(
+                current->status,
+                "CANCELLED"
+            ) != 0 &&
+            strcmp(
+                current->status,
+                "COMPLETED"
+            ) != 0
+        )
         {
-
-            if (a->status == CANCELLED)
-                continue;
-
-
-            /*
-               Appointment completed early.
-
-               Check if original slot can
-               be recovered.
-            */
-
-            if (a->status == COMPLETED &&
-                isRecoverableSlot(a))
-            {
-                continue;
-            }
-
-
             return 0;
         }
-    }
 
+        current =
+            current->next;
+    }
 
     return 1;
 }
 
 
-void bookAppointment()
+/* =========================
+   CREATE APPOINTMENT
+   ========================= */
+
+static Appointment *createAppointment(
+    int patientId,
+    int doctorId,
+    const char *date,
+    const char *time
+)
 {
-    if (appointmentCount >= MAX_APPOINTMENTS)
+    Appointment *newAppointment;
+
+    Appointment *current;
+
+    newAppointment =
+        (Appointment *)malloc(
+            sizeof(Appointment)
+        );
+
+    if (newAppointment == NULL)
     {
-        printf("\nAppointment storage full.\n");
-        return;
+        return NULL;
     }
 
+    newAppointment->id =
+        nextAppointmentId++;
 
+    newAppointment->patientId =
+        patientId;
+
+    newAppointment->doctorId =
+        doctorId;
+
+    strcpy(
+        newAppointment->date,
+        date
+    );
+
+    strcpy(
+        newAppointment->time,
+        time
+    );
+
+    strcpy(
+        newAppointment->status,
+        "BOOKED"
+    );
+
+    newAppointment->next =
+        NULL;
+
+    if (appointmentHead == NULL)
+    {
+        appointmentHead =
+            newAppointment;
+    }
+    else
+    {
+        current =
+            appointmentHead;
+
+        while (
+            current->next != NULL
+        )
+        {
+            current =
+                current->next;
+        }
+
+        current->next =
+            newAppointment;
+    }
+
+    saveAppointments();
+
+    return newAppointment;
+}
+
+
+/* =========================
+   BOOK APPOINTMENT
+   ========================= */
+
+void bookAppointment(void)
+{
     int patientId;
     int doctorId;
 
-    char date[11];
-    char time[6];
+    char date[DATE_LEN];
+    char time[TIME_LEN];
 
+    Patient *patient;
+    Doctor *doctor;
+    Appointment *appointment;
 
-    printf("\n=============== BOOK APPOINTMENT ===============\n");
-
-
-    viewPatients();
-
-    printf("\nPatient ID: ");
-    scanf("%d", &patientId);
-
-
-    if (getPatient(patientId) == NULL)
+    if (patientHead == NULL)
     {
-        printf("Invalid patient.\n");
+        printf(
+            "\nRegister a patient first.\n"
+        );
+
         return;
     }
 
+    if (doctorHead == NULL)
+    {
+        printf(
+            "\nAdd a doctor first.\n"
+        );
 
-    viewDoctors();
+        return;
+    }
 
-    printf("\nDoctor ID: ");
-    scanf("%d", &doctorId);
+    printf("\n");
+    printf("========================================\n");
+    printf("           BOOK APPOINTMENT\n");
+    printf("========================================\n");
 
+    printf("Patient ID: ");
+    scanf(
+        "%d",
+        &patientId
+    );
 
-    Doctor *doctor =
-        getDoctor(doctorId);
+    patient =
+        findPatientById(
+            patientId
+        );
 
+    if (patient == NULL)
+    {
+        printf(
+            "\nPatient not found.\n"
+        );
+
+        return;
+    }
+
+    printf("Doctor ID: ");
+    scanf(
+        "%d",
+        &doctorId
+    );
+
+    doctor =
+        findDoctorById(
+            doctorId
+        );
 
     if (doctor == NULL)
     {
-        printf("Invalid doctor.\n");
+        printf(
+            "\nDoctor not found.\n"
+        );
+
         return;
     }
 
+    printf(
+        "Date (YYYY-MM-DD): "
+    );
 
-    printf("Date (YYYY-MM-DD): ");
-    scanf("%10s", date);
+    scanf(
+        "%10s",
+        date
+    );
 
+    printf(
+        "Time (HH:MM): "
+    );
 
-    printf("\nAvailable Slots\n");
-    printf("--------------------------------\n");
+    scanf(
+        "%5s",
+        time
+    );
 
+    if (
+        timeToMinutes(time) <
+        timeToMinutes(
+            doctor->startTime
+        ) ||
 
-    int start =
-        timeToMinutes(doctor->startTime);
-
-    int end =
-        timeToMinutes(doctor->endTime);
-
-
-    for (
-        int t = start;
-        t + doctor->slotDuration <= end;
-        t += doctor->slotDuration
+        timeToMinutes(time) >=
+        timeToMinutes(
+            doctor->endTime
+        )
     )
     {
-        char slot[6];
-
-        sprintf(
-            slot,
-            "%02d:%02d",
-            t / 60,
-            t % 60
+        printf(
+            "\nDoctor is not available at this time.\n"
         );
 
+        printf(
+            "Working Hours: %s - %s\n",
+            doctor->startTime,
+            doctor->endTime
+        );
 
-        if (
-            isSlotAvailable(
-                doctorId,
-                date,
-                slot
-            )
-        )
-        {
-            printf("%s\n", slot);
-        }
+        return;
     }
 
+    if (
+        timeToMinutes(time) % 30 != 0
+    )
+    {
+        printf(
+            "\nAppointments use 30-minute slots.\n"
+        );
 
-    printf("\nChoose Time: ");
-    scanf("%5s", time);
-
+        return;
+    }
 
     if (
         !isSlotAvailable(
@@ -300,75 +524,99 @@ void bookAppointment()
         )
     )
     {
-        printf("\nSlot unavailable.\n");
+        printf(
+            "\nThis slot is already booked.\n"
+        );
+
+        printf(
+            "Use Smart Appointment Finder to locate another slot.\n"
+        );
+
         return;
     }
 
+    appointment =
+        createAppointment(
+            patientId,
+            doctorId,
+            date,
+            time
+        );
 
-    Appointment *a =
-        &appointments[appointmentCount];
+    if (appointment == NULL)
+    {
+        printf(
+            "\nUnable to create appointment.\n"
+        );
 
+        return;
+    }
 
-    a->id =
-        10001 + appointmentCount;
+    printf(
+        "\nAppointment booked successfully.\n"
+    );
 
-    a->patientId =
-        patientId;
+    printf(
+        "Appointment ID : %d\n",
+        appointment->id
+    );
 
-    a->doctorId =
-        doctorId;
+    printf(
+        "Patient        : %s\n",
+        patient->name
+    );
 
+    printf(
+        "Doctor         : %s\n",
+        doctor->name
+    );
 
-    strcpy(
-        a->date,
+    printf(
+        "Date           : %s\n",
         date
     );
 
-    strcpy(
-        a->scheduledTime,
-        time
-    );
-
-
-    strcpy(
-        a->checkInTime,
-        ""
-    );
-
-    strcpy(
-        a->actualStart,
-        ""
-    );
-
-    strcpy(
-        a->actualEnd,
-        ""
-    );
-
-
-    a->status =
-        BOOKED;
-
-
-    appointmentCount++;
-
-
-    printf("\nAppointment booked successfully.\n");
-
     printf(
-        "Appointment ID: %d\n",
-        a->id
+        "Time           : %s\n",
+        time
     );
 }
 
 
-void viewAppointments()
-{
-    printf("\n================ APPOINTMENTS ================\n");
+/* =========================
+   VIEW APPOINTMENTS
+   ========================= */
 
+void viewAppointments(void)
+{
+    Appointment *current =
+        appointmentHead;
+
+    printf("\n");
 
     printf(
-        "%-7s %-20s %-20s %-11s %-7s %-15s\n",
+        "================================================================================================\n"
+    );
+
+    printf(
+        "                                      APPOINTMENTS\n"
+    );
+
+    printf(
+        "================================================================================================\n"
+    );
+
+    if (current == NULL)
+    {
+        printf(
+            "No appointments available.\n"
+        );
+
+        return;
+    }
+
+    printf(
+        "%-6s %-20s %-20s %-12s %-8s %-18s\n",
         "ID",
         "Patient",
         "Doctor",
@@ -377,124 +625,264 @@ void viewAppointments()
         "Status"
     );
 
-
     printf(
-        "--------------------------------------------------------------------------------\n"
+        "------------------------------------------------------------------------------------------------\n"
     );
 
-
-    for (int i = 0;
-         i < appointmentCount;
-         i++)
+    while (current != NULL)
     {
-
-        Appointment *a =
-            &appointments[i];
-
-
         Patient *patient =
-            getPatient(a->patientId);
-
-
-        Doctor *doctor =
-            getDoctor(a->doctorId);
-
-
-        char status[20];
-
-
-        switch (a->status)
-        {
-            case BOOKED:
-                strcpy(status, "Booked");
-                break;
-
-            case WAITING:
-                strcpy(status, "Waiting");
-                break;
-
-            case CONSULTING:
-                strcpy(status, "Consulting");
-                break;
-
-            case COMPLETED:
-                strcpy(status, "Completed");
-                break;
-
-            case CANCELLED:
-                strcpy(status, "Cancelled");
-                break;
-        }
-
-
-        printf(
-            "%-7d %-20s %-20s %-11s %-7s %-15s\n",
-            a->id,
-            patient->name,
-            doctor->name,
-            a->date,
-            a->scheduledTime,
-            status
-        );
-
-
-        if (a->status == COMPLETED)
-        {
-            printf(
-                "        Actual consultation: %s - %s\n",
-                a->actualStart,
-                a->actualEnd
+            findPatientById(
+                current->patientId
             );
 
+        Doctor *doctor =
+            findDoctorById(
+                current->doctorId
+            );
 
-            if (isRecoverableSlot(a))
-            {
-                printf(
-                    "        >> Original %s slot RECOVERED\n",
-                    a->scheduledTime
-                );
-            }
-        }
+        printf(
+            "%-6d %-20s %-20s %-12s %-8s %-18s\n",
+            current->id,
+            patient != NULL
+                ? patient->name
+                : "Unknown",
+            doctor != NULL
+                ? doctor->name
+                : "Unknown",
+            current->date,
+            current->time,
+            current->status
+        );
+
+        current =
+            current->next;
     }
 }
 
 
-void cancelAppointment()
+/* =========================
+   PATIENT CHECK-IN
+   ========================= */
+
+void patientCheckIn(void)
 {
     int id;
 
+    Appointment *appointment;
 
     printf(
-        "\nAppointment ID to cancel: "
+        "\nAppointment ID: "
     );
 
-    scanf("%d", &id);
+    scanf(
+        "%d",
+        &id
+    );
 
+    appointment =
+        findAppointmentById(id);
 
-    Appointment *a =
-        getAppointment(id);
-
-
-    if (a == NULL)
+    if (appointment == NULL)
     {
         printf(
-            "Appointment not found.\n"
+            "\nAppointment not found.\n"
         );
 
         return;
     }
 
+    if (
+        strcmp(
+            appointment->status,
+            "BOOKED"
+        ) != 0
+    )
+    {
+        printf(
+            "\nAppointment cannot be checked in.\n"
+        );
 
-    a->status =
-        CANCELLED;
+        printf(
+            "Current Status: %s\n",
+            appointment->status
+        );
 
+        return;
+    }
+
+    strcpy(
+        appointment->status,
+        "CHECKED_IN"
+    );
+
+    enqueueWaiting(id);
+
+    saveAppointments();
 
     printf(
-        "\nAppointment cancelled.\n"
+        "\nPatient checked in successfully.\n"
     );
 
     printf(
-        "%s slot is now available again.\n",
-        a->scheduledTime
+        "Added to FIFO waiting queue.\n"
+    );
+}
+
+
+/* =========================
+   COMPLETE CONSULTATION
+   ========================= */
+
+void completeConsultation(void)
+{
+    int id;
+
+    char completedTime[TIME_LEN];
+
+    Appointment *appointment;
+
+    printf(
+        "\nAppointment ID: "
+    );
+
+    scanf(
+        "%d",
+        &id
+    );
+
+    appointment =
+        findAppointmentById(id);
+
+    if (appointment == NULL)
+    {
+        printf(
+            "\nAppointment not found.\n"
+        );
+
+        return;
+    }
+
+    if (
+        strcmp(
+            appointment->status,
+            "IN_CONSULTATION"
+        ) != 0
+    )
+    {
+        printf(
+            "\nThis appointment is not currently in consultation.\n"
+        );
+
+        printf(
+            "Current Status: %s\n",
+            appointment->status
+        );
+
+        return;
+    }
+
+    printf(
+        "Actual completion time (HH:MM): "
+    );
+
+    scanf(
+        "%5s",
+        completedTime
+    );
+
+    strcpy(
+        appointment->status,
+        "COMPLETED"
+    );
+
+    saveAppointments();
+
+    printf(
+        "\nConsultation completed.\n"
+    );
+
+    handleEarlyCompletion(
+        appointment->doctorId,
+        appointment->date,
+        completedTime
+    );
+}
+
+
+/* =========================
+   CANCEL APPOINTMENT
+   ========================= */
+
+void cancelAppointment(void)
+{
+    int id;
+
+    Appointment *appointment;
+
+    printf(
+        "\nAppointment ID: "
+    );
+
+    scanf(
+        "%d",
+        &id
+    );
+
+    appointment =
+        findAppointmentById(id);
+
+    if (appointment == NULL)
+    {
+        printf(
+            "\nAppointment not found.\n"
+        );
+
+        return;
+    }
+
+    if (
+        strcmp(
+            appointment->status,
+            "COMPLETED"
+        ) == 0
+    )
+    {
+        printf(
+            "\nCompleted appointment cannot be cancelled.\n"
+        );
+
+        return;
+    }
+
+    if (
+        strcmp(
+            appointment->status,
+            "CANCELLED"
+        ) == 0
+    )
+    {
+        printf(
+            "\nAppointment already cancelled.\n"
+        );
+
+        return;
+    }
+
+    strcpy(
+        appointment->status,
+        "CANCELLED"
+    );
+
+    saveAppointments();
+
+    printf(
+        "\nAppointment cancelled successfully.\n"
+    );
+
+    printf(
+        "Slot %s on %s is now available.\n",
+        appointment->time,
+        appointment->date
     );
 }

@@ -1,43 +1,130 @@
 #include "hospital.h"
 
 
-typedef struct
+/* ==========================================
+   TIME -> MINUTES
+
+   Example:
+
+   16:30
+
+   = 16 * 60 + 30
+   = 990 minutes
+   ========================================== */
+
+int timeToMinutes(const char *time)
 {
-    int doctorId;
+    int hour;
 
-    int slotMinutes;
-
-    char slot[6];
-
-    int workload;
-
-    int waiting;
-
-    int score;
-
-} Recommendation;
+    int minute;
 
 
-void smartAppointmentFinder()
+    if (
+        sscanf(
+            time,
+            "%d:%d",
+            &hour,
+            &minute
+        ) != 2
+    )
+    {
+        return -1;
+    }
+
+
+    return (
+        hour * 60 +
+        minute
+    );
+}
+
+
+/* ==========================================
+   MINUTES -> TIME
+   ========================================== */
+
+void minutesToTime(
+    int minutes,
+    char *buffer
+)
+{
+    int hour =
+        minutes / 60;
+
+
+    int minute =
+        minutes % 60;
+
+
+    sprintf(
+        buffer,
+        "%02d:%02d",
+        hour,
+        minute
+    );
+}
+
+
+/* ==========================================
+   SMART APPOINTMENT FINDER
+
+   Searches doctors according to
+   specialization.
+
+   Then searches 30-minute slots and finds
+   the earliest available appointment.
+
+   DSA concepts:
+
+   Linked-list traversal
+   Searching
+   Scheduling
+   ========================================== */
+
+void smartAppointmentFinder(void)
 {
     int patientId;
 
-    char specialization[40];
+    char specialization[SPEC_LEN];
 
-    char date[11];
+    char date[DATE_LEN];
+
+    Patient *patient;
+
+    Doctor *doctor;
+
+    Doctor *bestDoctor = NULL;
+
+    int bestTime = -1;
 
 
-    printf(
-        "\n=========== SMART APPOINTMENT FINDER ===========\n"
-    );
+    if (patientHead == NULL)
+    {
+        printf(
+            "\nRegister a patient first.\n"
+        );
+
+        return;
+    }
 
 
-    viewPatients();
+    if (doctorHead == NULL)
+    {
+        printf(
+            "\nNo doctors available.\n"
+        );
+
+        return;
+    }
 
 
-    printf(
-        "\nPatient ID: "
-    );
+    printf("\n");
+    printf("========================================\n");
+    printf("       SMART APPOINTMENT FINDER\n");
+    printf("========================================\n");
+
+
+    printf("Patient ID: ");
 
     scanf(
         "%d",
@@ -45,31 +132,31 @@ void smartAppointmentFinder()
     );
 
 
-    if (
-        getPatient(patientId) == NULL
-    )
+    patient =
+        findPatientById(
+            patientId
+        );
+
+
+    if (patient == NULL)
     {
         printf(
-            "Invalid patient.\n"
+            "\nPatient not found.\n"
         );
 
         return;
     }
 
 
-    printf(
-        "Required Specialization: "
-    );
+    printf("Required Specialization: ");
 
     scanf(
-        " %[^\n]",
+        " %59[^\n]",
         specialization
     );
 
 
-    printf(
-        "Date (YYYY-MM-DD): "
-    );
+    printf("Date (YYYY-MM-DD): ");
 
     scanf(
         "%10s",
@@ -77,407 +164,431 @@ void smartAppointmentFinder()
     );
 
 
-    Recommendation results[MAX_DOCTORS];
-
-    int resultCount = 0;
+    doctor =
+        doctorHead;
 
 
     /*
-       Search doctors matching
-       required specialization.
+        Traverse all doctors.
     */
 
-
-    for (
-        int i = 0;
-        i < doctorCount;
-        i++
-    )
+    while (doctor != NULL)
     {
-
-        Doctor *doctor =
-            &doctors[i];
-
-
         if (
             strcmp(
                 doctor->specialization,
                 specialization
-            ) != 0
+            ) == 0
         )
         {
-            continue;
-        }
+            int start =
+                timeToMinutes(
+                    doctor->startTime
+                );
 
 
-        int workload = 0;
-
-        int waiting = 0;
-
-
-        /*
-           Calculate workload.
-        */
+            int end =
+                timeToMinutes(
+                    doctor->endTime
+                );
 
 
-        for (
-            int j = 0;
-            j < appointmentCount;
-            j++
-        )
-        {
-
-            Appointment *a =
-                &appointments[j];
+            int slot;
 
 
-            if (
-                a->doctorId ==
-                    doctor->id &&
+            /*
+                Search every 30-minute slot.
+            */
 
-                strcmp(
-                    a->date,
-                    date
-                ) == 0 &&
-
-                a->status !=
-                    CANCELLED
+            for (
+                slot = start;
+                slot < end;
+                slot += 30
             )
             {
+                char time[TIME_LEN];
 
-                workload++;
+
+                minutesToTime(
+                    slot,
+                    time
+                );
 
 
                 if (
-                    a->status ==
-                    WAITING
+                    isSlotAvailable(
+                        doctor->id,
+                        date,
+                        time
+                    )
                 )
                 {
-                    waiting++;
+                    /*
+                        Choose earliest slot
+                        across all matching doctors.
+                    */
+
+                    if (
+                        bestTime == -1 ||
+                        slot < bestTime
+                    )
+                    {
+                        bestTime =
+                            slot;
+
+
+                        bestDoctor =
+                            doctor;
+                    }
+
+
+                    /*
+                        This is the earliest free
+                        slot for this doctor.
+                    */
+
+                    break;
                 }
             }
         }
 
 
-        int start =
-            timeToMinutes(
-                doctor->startTime
-            );
-
-
-        int end =
-            timeToMinutes(
-                doctor->endTime
-            );
-
-
-        /*
-           Find earliest available slot.
-        */
-
-
-        for (
-            int t = start;
-            t + doctor->slotDuration <= end;
-            t += doctor->slotDuration
-        )
-        {
-
-            char slot[6];
-
-
-            sprintf(
-                slot,
-                "%02d:%02d",
-                t / 60,
-                t % 60
-            );
-
-
-            if (
-                isSlotAvailable(
-                    doctor->id,
-                    date,
-                    slot
-                )
-            )
-            {
-
-                Recommendation *r =
-                    &results[
-                        resultCount
-                    ];
-
-
-                r->doctorId =
-                    doctor->id;
-
-
-                r->slotMinutes =
-                    t;
-
-
-                strcpy(
-                    r->slot,
-                    slot
-                );
-
-
-                r->workload =
-                    workload;
-
-
-                r->waiting =
-                    waiting;
-
-
-                /*
-                   Higher score is better.
-                */
-
-
-                r->score =
-                    100
-                    - workload * 3
-                    - waiting * 10;
-
-
-                resultCount++;
-
-
-                break;
-            }
-        }
+        doctor =
+            doctor->next;
     }
 
 
-    if (
-        resultCount == 0
-    )
+    if (bestDoctor == NULL)
     {
         printf(
-            "\nNo suitable appointment found.\n"
+            "\nNo available appointment found.\n"
         );
+
+        return;
+    }
+
+
+    {
+        char bestTimeString[TIME_LEN];
+
+
+        minutesToTime(
+            bestTime,
+            bestTimeString
+        );
+
+
+        printf("\n");
+        printf("========================================\n");
+        printf("          BEST APPOINTMENT\n");
+        printf("========================================\n");
+
+
+        printf(
+            "Patient : %s\n",
+            patient->name
+        );
+
+
+        printf(
+            "Doctor  : %s\n",
+            bestDoctor->name
+        );
+
+
+        printf(
+            "Specialization : %s\n",
+            bestDoctor->specialization
+        );
+
+
+        printf(
+            "Date    : %s\n",
+            date
+        );
+
+
+        printf(
+            "Time    : %s\n",
+            bestTimeString
+        );
+
+
+        printf(
+            "\nThis is the earliest available slot.\n"
+        );
+    }
+}
+
+
+/* ==========================================
+   EARLY COMPLETION OPTIMISATION
+
+   Example:
+
+   Appointment slot: 16:00
+   Expected block:    16:00 - 16:30
+
+   Consultation ends: 16:20
+
+   Next slot:         16:30
+   Following slot:    17:00
+
+
+   We check:
+
+   1. Is there someone already waiting for
+      this doctor?
+
+      If yes, we do NOT let a new patient
+      bypass them.
+
+   2. Is the next scheduled slot empty?
+
+      If yes, the newly available capacity
+      can be utilised.
+
+   This demonstrates dynamic scheduling.
+   ========================================== */
+
+void handleEarlyCompletion(
+    int doctorId,
+    const char *date,
+    const char *completedTime
+)
+{
+    int completion;
+
+    int nextSlot;
+
+    int followingSlot;
+
+    char nextTime[TIME_LEN];
+
+    char followingTime[TIME_LEN];
+
+    WaitingNode *waiting;
+
+
+    completion =
+        timeToMinutes(
+            completedTime
+        );
+
+
+    if (completion < 0)
+    {
+        return;
+    }
+
+
+    /*
+        Round completion time upward to
+        next 30-minute boundary.
+
+        Example:
+
+        16:20 -> 16:30
+    */
+
+    nextSlot =
+        (
+            (completion + 29)
+            / 30
+        ) * 30;
+
+
+    followingSlot =
+        nextSlot + 30;
+
+
+    minutesToTime(
+        nextSlot,
+        nextTime
+    );
+
+
+    minutesToTime(
+        followingSlot,
+        followingTime
+    );
+
+
+    /*
+        First check whether an eligible patient
+        is already waiting for this doctor.
+
+        Existing queue patients must not be
+        bypassed.
+    */
+
+    waiting =
+        waitingFront;
+
+
+    while (waiting != NULL)
+    {
+        Appointment *appointment =
+            findAppointmentById(
+                waiting->appointmentId
+            );
+
+
+        if (
+            appointment != NULL &&
+            appointment->doctorId == doctorId &&
+            strcmp(
+                appointment->date,
+                date
+            ) == 0
+        )
+        {
+            Patient *patient =
+                findPatientById(
+                    appointment->patientId
+                );
+
+
+            printf("\n");
+            printf("SMART SCHEDULER:\n");
+
+
+            printf(
+                "Doctor became available at %s.\n",
+                completedTime
+            );
+
+
+            printf(
+                "Waiting patient %s already requires this doctor.\n",
+                patient != NULL
+                    ? patient->name
+                    : "Unknown"
+            );
+
+
+            printf(
+                "Existing waiting patient receives priority.\n"
+            );
+
+
+            return;
+        }
+
+
+        waiting =
+            waiting->next;
+    }
+
+
+    /*
+        Your requested rule:
+
+        Only consider early slot utilisation
+        when the following normal slot is empty.
+
+        Example:
+
+        available early at 16:20
+
+        next boundary = 16:30
+        following slot = 17:00
+
+        If 17:00 is already booked, we don't
+        advertise this as extra capacity for
+        a new patient.
+    */
+
+    if (
+        !isSlotAvailable(
+            doctorId,
+            date,
+            followingTime
+        )
+    )
+    {
+        printf("\n");
+        printf("SMART SCHEDULER:\n");
+
+
+        printf(
+            "Consultation completed at %s.\n",
+            completedTime
+        );
+
+
+        printf(
+            "Upcoming schedule is occupied.\n"
+        );
+
+
+        printf(
+            "No extra walk-in slot opened.\n"
+        );
+
 
         return;
     }
 
 
     /*
-       SORT RECOMMENDATIONS
-
-       Priority:
-
-       1. Earliest slot
-       2. Highest score
+        Also ensure next slot itself isn't
+        occupied.
     */
 
-
-    for (
-        int i = 0;
-        i < resultCount - 1;
-        i++
-    )
-    {
-
-        for (
-            int j = 0;
-            j < resultCount - i - 1;
-            j++
-        )
-        {
-
-            int swap = 0;
-
-
-            if (
-                results[j].slotMinutes >
-                results[j + 1].slotMinutes
-            )
-            {
-                swap = 1;
-            }
-
-
-            else if (
-                results[j].slotMinutes ==
-                    results[j + 1].slotMinutes &&
-
-                results[j].score <
-                    results[j + 1].score
-            )
-            {
-                swap = 1;
-            }
-
-
-            if (swap)
-            {
-                Recommendation temp =
-                    results[j];
-
-
-                results[j] =
-                    results[j + 1];
-
-
-                results[j + 1] =
-                    temp;
-            }
-        }
-    }
-
-
-    printf(
-        "\n============= RECOMMENDATIONS =============\n"
-    );
-
-
-    for (
-        int i = 0;
-        i < resultCount;
-        i++
-    )
-    {
-
-        Doctor *doctor =
-            getDoctor(
-                results[i].doctorId
-            );
-
-
-        printf(
-            "\n%d. %s\n",
-            i + 1,
-            doctor->name
-        );
-
-
-        printf(
-            "   Time     : %s\n",
-            results[i].slot
-        );
-
-
-        printf(
-            "   Workload : %d\n",
-            results[i].workload
-        );
-
-
-        printf(
-            "   Waiting  : %d\n",
-            results[i].waiting
-        );
-
-
-        printf(
-            "   Score    : %d\n",
-            results[i].score
-        );
-
-
-        if (i == 0)
-        {
-            printf(
-                "   *** BEST MATCH ***\n"
-            );
-        }
-    }
-
-
-    int choice;
-
-
-    printf(
-        "\nSelect recommendation (0 to cancel): "
-    );
-
-
-    scanf(
-        "%d",
-        &choice
-    );
-
-
     if (
-        choice <= 0 ||
-        choice > resultCount
+        !isSlotAvailable(
+            doctorId,
+            date,
+            nextTime
+        )
     )
     {
+        printf("\n");
+        printf("SMART SCHEDULER:\n");
+
+
+        printf(
+            "%s slot is already booked.\n",
+            nextTime
+        );
+
+
         return;
     }
 
 
-    Recommendation selected =
-        results[
-            choice - 1
-        ];
-
-
-    Appointment *a =
-        &appointments[
-            appointmentCount
-        ];
-
-
-    a->id =
-        10001 +
-        appointmentCount;
-
-
-    a->patientId =
-        patientId;
-
-
-    a->doctorId =
-        selected.doctorId;
-
-
-    strcpy(
-        a->date,
-        date
-    );
-
-
-    strcpy(
-        a->scheduledTime,
-        selected.slot
-    );
-
-
-    strcpy(
-        a->checkInTime,
-        ""
-    );
-
-
-    strcpy(
-        a->actualStart,
-        ""
-    );
-
-
-    strcpy(
-        a->actualEnd,
-        ""
-    );
-
-
-    a->status =
-        BOOKED;
-
-
-    appointmentCount++;
+    printf("\n");
+    printf("========================================\n");
+    printf("        SMART SLOT OPTIMISATION\n");
+    printf("========================================\n");
 
 
     printf(
-        "\nSmart appointment booked successfully.\n"
+        "Consultation finished early at %s.\n",
+        completedTime
     );
 
 
     printf(
-        "Appointment ID: %d\n",
-        a->id
+        "No eligible patient is waiting.\n"
+    );
+
+
+    printf(
+        "Upcoming %s slot is free.\n",
+        followingTime
+    );
+
+
+    printf(
+        "%s can now be offered to a walk-in/new patient.\n",
+        nextTime
+    );
+
+
+    printf(
+        "This avoids unnecessary waiting until %s.\n",
+        followingTime
     );
 }

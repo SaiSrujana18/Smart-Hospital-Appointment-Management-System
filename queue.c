@@ -1,490 +1,508 @@
 #include "hospital.h"
 
 
-void checkInPatient()
+static unsigned long nextPrioritySequence = 1;
+
+
+/* ==========================================
+   PRIORITY NAME
+   ========================================== */
+
+const char *priorityName(int priority)
 {
-    int id;
-
-
-    printf(
-        "\nAppointment ID: "
-    );
-
-    scanf("%d", &id);
-
-
-    Appointment *a =
-        getAppointment(id);
-
-
-    if (a == NULL)
+    switch (priority)
     {
-        printf(
-            "Appointment not found.\n"
-        );
+        case 1:
+            return "Emergency";
 
-        return;
+        case 2:
+            return "Urgent";
+
+        case 3:
+            return "Senior";
+
+        case 4:
+            return "Normal";
+
+        default:
+            return "Unknown";
     }
-
-
-    if (a->status != BOOKED)
-    {
-        printf(
-            "Appointment cannot be checked in.\n"
-        );
-
-        return;
-    }
-
-
-    a->status =
-        WAITING;
-
-
-    getCurrentTime(
-        a->checkInTime
-    );
-
-
-    printf(
-        "\nPatient checked in at %s.\n",
-        a->checkInTime
-    );
-
-
-    printf(
-        "Added to FIFO waiting queue.\n"
-    );
 }
 
 
-void viewWaitingQueue()
+/* ==========================================
+   FIFO ENQUEUE
+
+   Complexity: O(1)
+   ========================================== */
+
+void enqueueWaiting(int appointmentId)
 {
-    int doctorId;
+    WaitingNode *newNode;
 
 
-    viewDoctors();
+    newNode =
+        (WaitingNode *)malloc(
+            sizeof(WaitingNode)
+        );
 
 
-    printf(
-        "\nDoctor ID: "
-    );
+    if (newNode == NULL)
+    {
+        printf(
+            "\nUnable to add patient to queue.\n"
+        );
 
-    scanf("%d", &doctorId);
+        return;
+    }
 
 
-    printf(
-        "\n========== LIVE WAITING QUEUE ==========\n"
-    );
+    newNode->appointmentId =
+        appointmentId;
 
+
+    newNode->next =
+        NULL;
+
+
+    if (waitingRear == NULL)
+    {
+        waitingFront =
+            newNode;
+
+        waitingRear =
+            newNode;
+    }
+
+    else
+    {
+        waitingRear->next =
+            newNode;
+
+        waitingRear =
+            newNode;
+    }
+}
+
+
+/* ==========================================
+   FIFO DEQUEUE
+
+   Complexity: O(1)
+   ========================================== */
+
+int dequeueWaiting(void)
+{
+    WaitingNode *temp;
+
+    int appointmentId;
+
+
+    if (waitingFront == NULL)
+    {
+        return -1;
+    }
+
+
+    temp =
+        waitingFront;
+
+
+    appointmentId =
+        temp->appointmentId;
+
+
+    waitingFront =
+        waitingFront->next;
+
+
+    if (waitingFront == NULL)
+    {
+        waitingRear =
+            NULL;
+    }
+
+
+    free(temp);
+
+
+    return appointmentId;
+}
+
+
+/* ==========================================
+   VIEW WAITING QUEUE
+   ========================================== */
+
+void viewWaitingQueue(void)
+{
+    WaitingNode *current =
+        waitingFront;
 
     int position = 1;
 
 
-    /*
-       Appointments enter WAITING state
-       in check-in order.
-
-       Therefore scanning the appointment
-       array represents FIFO ordering for
-       this case-study implementation.
-    */
+    printf("\n");
+    printf("==============================================================\n");
+    printf("                     LIVE WAITING QUEUE\n");
+    printf("==============================================================\n");
 
 
-    for (int i = 0;
-         i < appointmentCount;
-         i++)
+    if (current == NULL)
     {
+        printf(
+            "Waiting queue is empty.\n"
+        );
 
-        Appointment *a =
-            &appointments[i];
+        return;
+    }
 
 
-        if (
-            a->doctorId == doctorId &&
-            a->status == WAITING
-        )
+    printf(
+        "%-10s %-12s %-25s\n",
+        "Position",
+        "Appt ID",
+        "Patient"
+    );
+
+
+    printf(
+        "--------------------------------------------------------------\n"
+    );
+
+
+    while (current != NULL)
+    {
+        Appointment *appointment =
+            findAppointmentById(
+                current->appointmentId
+            );
+
+
+        if (appointment != NULL)
         {
-
-            Patient *p =
-                getPatient(
-                    a->patientId
+            Patient *patient =
+                findPatientById(
+                    appointment->patientId
                 );
 
 
             printf(
-                "%d. %s | Appointment %d | Scheduled %s | Check-in %s\n",
+                "%-10d %-12d %-25s\n",
                 position,
-                p->name,
-                a->id,
-                a->scheduledTime,
-                a->checkInTime
+                appointment->id,
+                patient != NULL
+                    ? patient->name
+                    : "Unknown"
             );
-
-
-            position++;
         }
-    }
 
 
-    if (position == 1)
-    {
-        printf(
-            "Queue empty.\n"
-        );
+        position++;
+
+
+        current =
+            current->next;
     }
 }
 
 
-void callNextPatient()
+/* ==========================================
+   CALL NEXT PATIENT
+   ========================================== */
+
+void callNextPatient(void)
 {
+    int appointmentId;
+
+    Appointment *appointment;
+
+    Patient *patient;
+
+    Doctor *doctor;
+
+
+    appointmentId =
+        dequeueWaiting();
+
+
+    if (appointmentId == -1)
+    {
+        printf(
+            "\nWaiting queue is empty.\n"
+        );
+
+        return;
+    }
+
+
+    appointment =
+        findAppointmentById(
+            appointmentId
+        );
+
+
+    if (appointment == NULL)
+    {
+        printf(
+            "\nAppointment record not found.\n"
+        );
+
+        return;
+    }
+
+
+    strcpy(
+        appointment->status,
+        "IN_CONSULTATION"
+    );
+
+
+    patient =
+        findPatientById(
+            appointment->patientId
+        );
+
+
+    doctor =
+        findDoctorById(
+            appointment->doctorId
+        );
+
+
+    printf("\n");
+    printf("========================================\n");
+    printf("             NEXT PATIENT\n");
+    printf("========================================\n");
+
+
+    printf(
+        "Patient : %s\n",
+        patient != NULL
+            ? patient->name
+            : "Unknown"
+    );
+
+
+    printf(
+        "Doctor  : %s\n",
+        doctor != NULL
+            ? doctor->name
+            : "Unknown"
+    );
+
+
+    printf(
+        "Status  : IN CONSULTATION\n"
+    );
+}
+
+
+/* ==========================================
+   ADD PRIORITY PATIENT
+
+   Priority queue remains sorted.
+
+   Lower priority number = more important.
+
+   For equal priorities, sequence preserves
+   FIFO ordering.
+   ========================================== */
+
+void addPriorityPatient(void)
+{
+    PriorityNode *newNode;
+
+    PriorityNode *current;
+
+    int patientId;
+
     int doctorId;
 
 
-    viewDoctors();
-
-
-    printf(
-        "\nDoctor ID: "
-    );
-
-    scanf("%d", &doctorId);
-
-
-    /*
-       Check whether doctor is already
-       consulting another patient.
-    */
-
-    for (int i = 0;
-         i < appointmentCount;
-         i++)
+    if (patientHead == NULL)
     {
-
-        if (
-            appointments[i].doctorId ==
-                doctorId &&
-
-            appointments[i].status ==
-                CONSULTING
-        )
-        {
-
-            printf(
-                "\nDoctor is already consulting a patient.\n"
-            );
-
-            return;
-        }
-    }
-
-
-    /*
-       FIFO:
-       first WAITING appointment found.
-    */
-
-    for (int i = 0;
-         i < appointmentCount;
-         i++)
-    {
-
-        Appointment *a =
-            &appointments[i];
-
-
-        if (
-            a->doctorId == doctorId &&
-            a->status == WAITING
-        )
-        {
-
-            a->status =
-                CONSULTING;
-
-
-            getCurrentTime(
-                a->actualStart
-            );
-
-
-            Patient *p =
-                getPatient(
-                    a->patientId
-                );
-
-
-            printf(
-                "\nCalling next patient:\n"
-            );
-
-
-            printf(
-                "%s\n",
-                p->name
-            );
-
-
-            printf(
-                "Consultation started at %s.\n",
-                a->actualStart
-            );
-
-
-            return;
-        }
-    }
-
-
-    printf(
-        "\nNo patient waiting.\n"
-    );
-}
-
-
-void completeConsultation()
-{
-    int appointmentId;
-
-
-    printf(
-        "\nAppointment ID: "
-    );
-
-    scanf(
-        "%d",
-        &appointmentId
-    );
-
-
-    Appointment *a =
-        getAppointment(
-            appointmentId
-        );
-
-
-    if (
-        a == NULL ||
-        a->status != CONSULTING
-    )
-    {
-
         printf(
-            "Active consultation not found.\n"
+            "\nRegister a patient first.\n"
         );
 
         return;
     }
 
 
-    getCurrentTime(
-        a->actualEnd
-    );
-
-
-    a->status =
-        COMPLETED;
-
-
-    printf(
-        "\nConsultation completed at %s.\n",
-        a->actualEnd
-    );
-
-
-    /*
-       Check Dynamic Gap Recovery.
-    */
-
-
-    if (
-        isRecoverableSlot(a)
-    )
-    {
-
-        printf(
-            "\n*** DYNAMIC SLOT RECOVERY ***\n"
-        );
-
-
-        printf(
-            "%s appointment completed before its scheduled time.\n",
-            a->scheduledTime
-        );
-
-
-        printf(
-            "Next slot is empty.\n"
-        );
-
-
-        printf(
-            "No patient is waiting.\n"
-        );
-
-
-        printf(
-            "%s slot has been released for a new appointment.\n",
-            a->scheduledTime
-        );
-    }
-}
-
-
-/* =================================================
-   PRIORITY QUEUE
-   ================================================= */
-
-
-void addPriorityPatient()
-{
-    int appointmentId;
-
-
-    printf(
-        "\nAppointment ID: "
-    );
-
-    scanf(
-        "%d",
-        &appointmentId
-    );
-
-
-    Appointment *a =
-        getAppointment(
-            appointmentId
-        );
-
-
-    if (a == NULL)
+    if (doctorHead == NULL)
     {
         printf(
-            "Appointment not found.\n"
+            "\nAdd a doctor first.\n"
         );
 
         return;
     }
 
 
-    printf(
-        "\nPriority Level\n"
-    );
-
-    printf(
-        "1. Emergency\n"
-    );
-
-    printf(
-        "2. Urgent\n"
-    );
-
-    printf(
-        "3. Senior Citizen\n"
-    );
-
-    printf(
-        "4. Normal\n"
-    );
-
-
-    int priority;
-
-
-    printf(
-        "Choose: "
-    );
+    printf("\nPatient ID: ");
 
     scanf(
         "%d",
-        &priority
+        &patientId
     );
 
 
-    priorityQueue[
-        priorityCount
-    ].appointmentId =
-        appointmentId;
+    if (
+        findPatientById(patientId)
+        == NULL
+    )
+    {
+        printf(
+            "\nPatient not found.\n"
+        );
+
+        return;
+    }
 
 
-    priorityQueue[
-        priorityCount
-    ].priority =
-        priority;
+    printf("Doctor ID: ");
+
+    scanf(
+        "%d",
+        &doctorId
+    );
 
 
-    priorityQueue[
-        priorityCount
-    ].arrivalOrder =
-        arrivalCounter++;
+    if (
+        findDoctorById(doctorId)
+        == NULL
+    )
+    {
+        printf(
+            "\nDoctor not found.\n"
+        );
+
+        return;
+    }
 
 
-    priorityCount++;
+    newNode =
+        (PriorityNode *)malloc(
+            sizeof(PriorityNode)
+        );
+
+
+    if (newNode == NULL)
+    {
+        printf(
+            "\nMemory allocation failed.\n"
+        );
+
+        return;
+    }
+
+
+    newNode->patientId =
+        patientId;
+
+
+    newNode->doctorId =
+        doctorId;
+
+
+    printf(
+        "Date (YYYY-MM-DD): "
+    );
+
+    scanf(
+        "%10s",
+        newNode->date
+    );
+
+
+    printf("\n");
+    printf("1. Emergency\n");
+    printf("2. Urgent\n");
+    printf("3. Senior Citizen\n");
+    printf("4. Normal\n");
+
+
+    printf("Priority: ");
+
+    scanf(
+        "%d",
+        &newNode->priority
+    );
+
+
+    if (
+        newNode->priority < 1 ||
+        newNode->priority > 4
+    )
+    {
+        printf(
+            "\nInvalid priority.\n"
+        );
+
+        free(newNode);
+
+        return;
+    }
+
+
+    newNode->sequence =
+        nextPrioritySequence++;
+
+
+    newNode->next =
+        NULL;
 
 
     /*
-       Bubble Sort
-
-       Lower number =
-       higher priority.
-
-       Same priority =
-       FIFO arrival order.
+        Insert at head if highest priority.
     */
 
+    if (
+        priorityHead == NULL ||
 
-    for (
-        int i = 0;
-        i < priorityCount - 1;
-        i++
+        newNode->priority <
+        priorityHead->priority
     )
     {
+        newNode->next =
+            priorityHead;
 
-        for (
-            int j = 0;
-            j < priorityCount - i - 1;
-            j++
+        priorityHead =
+            newNode;
+    }
+
+    else
+    {
+        current =
+            priorityHead;
+
+
+        /*
+            Move past nodes with higher priority
+            and nodes with equal priority.
+
+            This preserves FIFO for equal priority.
+        */
+
+        while (
+            current->next != NULL &&
+
+            current->next->priority <=
+            newNode->priority
         )
         {
-
-            int swap = 0;
-
-
-            if (
-                priorityQueue[j].priority >
-                priorityQueue[j + 1].priority
-            )
-            {
-                swap = 1;
-            }
-
-
-            else if (
-                priorityQueue[j].priority ==
-                priorityQueue[j + 1].priority &&
-
-                priorityQueue[j].arrivalOrder >
-                priorityQueue[j + 1].arrivalOrder
-            )
-            {
-                swap = 1;
-            }
-
-
-            if (swap)
-            {
-                PriorityPatient temp =
-                    priorityQueue[j];
-
-
-                priorityQueue[j] =
-                    priorityQueue[j + 1];
-
-
-                priorityQueue[j + 1] =
-                    temp;
-            }
+            current =
+                current->next;
         }
+
+
+        newNode->next =
+            current->next;
+
+
+        current->next =
+            newNode;
     }
 
 
@@ -494,172 +512,155 @@ void addPriorityPatient()
 }
 
 
-void viewPriorityQueue()
+/* ==========================================
+   VIEW PRIORITY QUEUE
+   ========================================== */
+
+void viewPriorityQueue(void)
 {
-    printf(
-        "\n========== PRIORITY QUEUE ==========\n"
-    );
+    PriorityNode *current =
+        priorityHead;
+
+    int position = 1;
 
 
-    if (
-        priorityCount == 0
-    )
+    printf("\n");
+    printf("==========================================================================\n");
+    printf("                            PRIORITY QUEUE\n");
+    printf("==========================================================================\n");
+
+
+    if (current == NULL)
     {
         printf(
-            "Priority queue empty.\n"
+            "Priority queue is empty.\n"
         );
 
         return;
     }
 
 
-    for (
-        int i = 0;
-        i < priorityCount;
-        i++
-    )
+    printf(
+        "%-10s %-25s %-20s %-15s\n",
+        "Position",
+        "Patient",
+        "Priority",
+        "Date"
+    );
+
+
+    printf(
+        "--------------------------------------------------------------------------\n"
+    );
+
+
+    while (current != NULL)
     {
-
-        Appointment *a =
-            getAppointment(
-                priorityQueue[i].appointmentId
+        Patient *patient =
+            findPatientById(
+                current->patientId
             );
-
-
-        Patient *p =
-            getPatient(
-                a->patientId
-            );
-
-
-        char priorityName[20];
-
-
-        switch (
-            priorityQueue[i].priority
-        )
-        {
-
-            case 1:
-
-                strcpy(
-                    priorityName,
-                    "Emergency"
-                );
-
-                break;
-
-
-            case 2:
-
-                strcpy(
-                    priorityName,
-                    "Urgent"
-                );
-
-                break;
-
-
-            case 3:
-
-                strcpy(
-                    priorityName,
-                    "Senior"
-                );
-
-                break;
-
-
-            default:
-
-                strcpy(
-                    priorityName,
-                    "Normal"
-                );
-        }
 
 
         printf(
-            "%d. %-25s %s\n",
-            i + 1,
-            p->name,
-            priorityName
+            "%-10d %-25s %-20s %-15s\n",
+            position,
+            patient != NULL
+                ? patient->name
+                : "Unknown",
+            priorityName(
+                current->priority
+            ),
+            current->date
         );
+
+
+        position++;
+
+
+        current =
+            current->next;
     }
 }
 
 
-void processPriorityPatient()
+/* ==========================================
+   PROCESS PRIORITY PATIENT
+   ========================================== */
+
+void processPriorityPatient(void)
 {
-    if (
-        priorityCount == 0
-    )
+    PriorityNode *node;
+
+    Patient *patient;
+
+    Doctor *doctor;
+
+
+    if (priorityHead == NULL)
     {
         printf(
-            "\nPriority queue empty.\n"
+            "\nPriority queue is empty.\n"
         );
 
         return;
     }
 
 
-    PriorityPatient next =
-        priorityQueue[0];
+    node =
+        priorityHead;
 
 
-    Appointment *a =
-        getAppointment(
-            next.appointmentId
+    priorityHead =
+        priorityHead->next;
+
+
+    patient =
+        findPatientById(
+            node->patientId
         );
 
 
-    Patient *p =
-        getPatient(
-            a->patientId
+    doctor =
+        findDoctorById(
+            node->doctorId
         );
 
 
-    printf(
-        "\nHighest priority patient:\n"
-    );
+    printf("\n");
+    printf("========================================\n");
+    printf("       PROCESSING PRIORITY PATIENT\n");
+    printf("========================================\n");
 
 
     printf(
-        "%s\n",
-        p->name
+        "Patient  : %s\n",
+        patient != NULL
+            ? patient->name
+            : "Unknown"
     );
-
-
-    a->status =
-        WAITING;
-
-
-    getCurrentTime(
-        a->checkInTime
-    );
-
-
-    /*
-       Remove front element
-       by shifting queue.
-    */
-
-
-    for (
-        int i = 1;
-        i < priorityCount;
-        i++
-    )
-    {
-        priorityQueue[i - 1] =
-            priorityQueue[i];
-    }
-
-
-    priorityCount--;
 
 
     printf(
-        "Patient moved to consultation waiting queue.\n"
+        "Doctor   : %s\n",
+        doctor != NULL
+            ? doctor->name
+            : "Unknown"
     );
+
+
+    printf(
+        "Priority : %s\n",
+        priorityName(
+            node->priority
+        )
+    );
+
+
+    printf(
+        "\nPatient sent for immediate consultation.\n"
+    );
+
+
+    free(node);
 }

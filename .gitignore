@@ -1,0 +1,9 @@
+# Compiled files
+*.exe
+*.o
+
+# Runtime hospital records
+data/*.dat
+
+# VS Code
+.vscode/
